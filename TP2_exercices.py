@@ -1,5 +1,6 @@
 import paho.mqtt.client as mqtt
 import time
+import json
 
 def ex1():
     print("------ Exercice 1 ------")
@@ -120,4 +121,55 @@ def ex4_raspbian():
     client.subscribe("/Junia/UserXX/temp_ext")
 
     print("En attente de messages...")
+    client.loop_forever()
+
+def ex5_debian():
+    data = {
+        "piece": 23.5,
+        "chauff": 26.0,
+        "ext": 27.0
+    }
+    
+    client = mqtt.Client()
+    client.connect("mosquitto.junia.com", 1883)
+    client.loop_start()
+
+    json_data = json.dumps(data)
+    client.publish("/Junia/UserXX/temp", json_data)
+    print("Températures envoyées :", json_data)
+
+    time.sleep(1)
+    client.loop_stop()
+    client.disconnect()
+
+def ex5_raspbian():
+    def on_message(client, userdata, message):
+        payload = message.payload.decode()
+        try:
+            data = json.loads(payload)
+            piece = data.get("piece")
+            chauff = data.get("chauff")
+            ext = data.get("ext")
+
+            print(f"Températures reçues - pièce: {piece}, chauff: {chauff}, ext: {ext}")
+
+            cmd = {
+                "chauffage": "off" if chauff and chauff > 25 else "on",
+                "fenetre": "open" if ext and piece and ext > piece else "closed"
+            }
+
+            cmd_json = json.dumps(cmd)
+            client.publish("/Junia/UserXX/cmd_act", cmd_json)
+            print("Commande envoyée :", cmd_json)
+
+        except json.JSONDecodeError:
+            print("Erreur : le message reçu n’est pas un JSON valide")
+
+    client = mqtt.Client()
+    client.on_message = on_message
+
+    client.connect("mosquitto.junia.com", 1883)
+    client.subscribe("/Junia/UserXX/temp")
+
+    print("En attente de données JSON...")
     client.loop_forever()
